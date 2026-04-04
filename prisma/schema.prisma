@@ -1,0 +1,217 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Status {
+  ACTIVE
+  INACTIVE
+}
+
+enum DocumentType {
+  DNI
+  CE
+  PASAPORTE
+}
+
+model User {
+  id             String       @id @default(cuid())
+  documentType      DocumentType @default(DNI) @map("document_type")
+  documentNumber    String       @unique @map("document_number")
+  email             String    @unique
+  password          String
+  firstName         String    @map("first_name")
+  paternalSurname   String    @map("paternal_surname")
+  maternalSurname   String    @map("maternal_surname")
+  roleId         String    @map("role_id")
+  status         Status    @default(ACTIVE)
+  themeColor     String    @default("neutral") @map("theme_color")
+  avatarUrl      String?   @map("avatar_url")
+  lastLoginAt    DateTime? @map("last_login_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  role    Role         @relation(fields: [roleId], references: [id])
+  modules UserModule[]
+
+  @@map("users")
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  isSystem    Boolean  @default(false) @map("is_system")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  permissions RolePermission[]
+  users       User[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  action      String
+  subject     String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  roles RolePermission[]
+
+  @@unique([action, subject])
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           String @id @default(cuid())
+  roleId       String @map("role_id")
+  permissionId String @map("permission_id")
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model Module {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  subject     String?  @unique
+  description String?
+  icon        String   @default("LayoutDashboard")
+  status      Status   @default(ACTIVE)
+  order       Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  users UserModule[]
+
+  @@map("modules")
+}
+
+model UserModule {
+  id       String @id @default(cuid())
+  userId   String @map("user_id")
+  moduleId String @map("module_id")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  module Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, moduleId])
+  @@map("user_modules")
+}
+
+// ============================================================
+// SISTEMA BIOMÉTRICO
+// ============================================================
+
+enum TipoPersona {
+  trabajador
+  estudiante
+  postulante
+  egresado
+}
+
+enum ResultadoAcceso {
+  autorizado
+  denegado
+}
+
+model Persona {
+  id        Int          @id @default(autoincrement())
+  dni       String       @unique @db.VarChar(20)
+  nombres   String       @db.VarChar(200)
+  apellidos String       @db.VarChar(200)
+  tipo      TipoPersona
+  fotoUrl   String?      @map("foto_url")
+  activo    Boolean      @default(true)
+  creadoEn  DateTime     @default(now()) @map("creado_en") @db.Timestamptz()
+
+  biometria       Biometria?
+  registrosAcceso RegistroAcceso[]
+  eventoPersonas  EventoPersona[]
+
+  @@map("personas")
+}
+
+model Biometria {
+  id              Int      @id @default(autoincrement())
+  personaId       Int      @unique @map("persona_id")
+  faceFoto        Bytes?   @map("face_foto")
+  huellaIndiceDer Bytes?   @map("huella_indice_der")
+  huellaPulgarDer Bytes?   @map("huella_pulgar_der")
+  registradoEn    DateTime @default(now()) @map("registrado_en") @db.Timestamptz()
+  actualizadoEn   DateTime @default(now()) @map("actualizado_en") @db.Timestamptz()
+
+  persona Persona @relation(fields: [personaId], references: [id], onDelete: Cascade)
+
+  @@map("biometria")
+}
+
+model SistemaExterno {
+  id            Int       @id @default(autoincrement())
+  nombre        String    @db.VarChar(200)
+  descripcion   String?
+  apiKeyHash    String    @unique @map("api_key_hash") @db.VarChar(128)
+  permisos      String[]  @default([])
+  activo        Boolean   @default(true)
+  creadoEn      DateTime  @default(now()) @map("creado_en") @db.Timestamptz()
+  ultimoAcceso  DateTime? @map("ultimo_acceso") @db.Timestamptz()
+
+  registrosAcceso RegistroAcceso[]
+
+  @@map("sistemas_externos")
+}
+
+model RegistroAcceso {
+  id              Int            @id @default(autoincrement())
+  personaId       Int?           @map("persona_id")
+  sistemaId       Int?           @map("sistema_id")
+  dispositivo     String?        @db.VarChar(200)
+  resultado       ResultadoAcceso
+  scoreConfianza  Float?         @map("score_confianza") @db.Real
+  motivo          String?
+  creadoEn        DateTime       @default(now()) @map("creado_en") @db.Timestamptz()
+
+  persona Persona?        @relation(fields: [personaId], references: [id], onDelete: SetNull)
+  sistema SistemaExterno? @relation(fields: [sistemaId], references: [id], onDelete: SetNull)
+
+  @@map("registros_acceso")
+}
+
+model Evento {
+  id          Int       @id @default(autoincrement())
+  nombre      String    @db.VarChar(300)
+  descripcion String?
+  fechaInicio DateTime  @map("fecha_inicio") @db.Timestamptz()
+  fechaFin    DateTime? @map("fecha_fin") @db.Timestamptz()
+  activo      Boolean   @default(true)
+  creadoEn    DateTime  @default(now()) @map("creado_en") @db.Timestamptz()
+
+  personas EventoPersona[]
+
+  @@map("eventos")
+}
+
+model EventoPersona {
+  id        Int      @id @default(autoincrement())
+  eventoId  Int      @map("evento_id")
+  personaId Int      @map("persona_id")
+  asistio   Boolean  @default(false)
+  horaRegistro DateTime? @map("hora_registro") @db.Timestamptz()
+
+  evento  Evento  @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+  persona Persona @relation(fields: [personaId], references: [id], onDelete: Cascade)
+
+  @@unique([eventoId, personaId])
+  @@map("evento_personas")
+}
