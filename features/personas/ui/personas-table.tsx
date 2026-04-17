@@ -87,6 +87,39 @@ function tipoVariant(tipo: string) {
   return "outline" as const
 }
 
+function getRegistroAgingInfo(registradoEn: Date | string | null): {
+  label: string
+  variant: "default" | "secondary" | "outline" | "destructive"
+  className: string
+} | null {
+  if (!registradoEn) return null
+
+  const registered = new Date(registradoEn)
+  const now = new Date()
+  const diffMs = now.getTime() - registered.getTime()
+  const diffMonths = diffMs / (1000 * 60 * 60 * 24 * 30)
+
+  if (diffMonths > 12) {
+    return {
+      label: "Registro desactualizado",
+      variant: "destructive",
+      className: "bg-red-500/10 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800",
+    }
+  }
+  if (diffMonths > 6) {
+    return {
+      label: "Actualizar registro",
+      variant: "outline",
+      className: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800",
+    }
+  }
+  return {
+    label: "Vigente",
+    variant: "outline",
+    className: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800",
+  }
+}
+
 // --- Stats Cards ---
 function StatsCards({
   total,
@@ -558,17 +591,31 @@ export function PersonasTable({ data }: PersonasTableProps) {
                         </Badge>
                       </TableCell>
                       <TableCell className="hidden sm:table-cell">
-                        <div className="flex items-center gap-1.5">
-                          <span
-                            className={`inline-block h-2 w-2 rounded-full ${
-                              persona.biometria
-                                ? "bg-emerald-500"
-                                : "bg-red-400"
-                            }`}
-                          />
-                          <span className="text-sm">
-                            {persona.biometria ? "Registrado" : "Sin rostro"}
-                          </span>
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className={`inline-block h-2 w-2 rounded-full ${
+                                persona.biometria
+                                  ? "bg-emerald-500"
+                                  : "bg-red-400"
+                              }`}
+                            />
+                            <span className="text-sm">
+                              {persona.biometria ? "Registrado" : "Sin rostro"}
+                            </span>
+                          </div>
+                          {persona.biometria && (() => {
+                            const aging = getRegistroAgingInfo(persona.biometria.registradoEn)
+                            if (!aging) return null
+                            return (
+                              <Badge
+                                variant={aging.variant}
+                                className={`w-fit text-[10px] px-1.5 py-0 leading-4 ${aging.className}`}
+                              >
+                                {aging.label}
+                              </Badge>
+                            )
+                          })()}
                         </div>
                       </TableCell>
                       <TableCell>

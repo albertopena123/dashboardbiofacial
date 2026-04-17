@@ -4,6 +4,10 @@ import { revalidatePath } from "next/cache"
 import { db } from "@/shared/lib/db"
 import { withPermission } from "@/features/auth/lib/guard"
 
+export async function revalidatePersonas() {
+  revalidatePath("/admin/personas")
+}
+
 interface ActionResult {
   error?: string
   fieldErrors?: Record<string, string>
@@ -60,7 +64,8 @@ export const createPersonaAction = withPermission(
           tipo: tipo as (typeof VALID_TIPOS)[number],
         },
       })
-    } catch {
+    } catch (e) {
+      console.error("Error al crear persona:", e)
       return { error: "Error al crear persona" }
     }
 
@@ -164,24 +169,26 @@ export const togglePersonaStatusAction = withPermission(
   }
 )
 
-// --- REGISTER FACE ---
-export const registerFaceAction = withPermission(
+// --- LIVENESS CHECK ---
+export const checkLivenessAction = withPermission(
   "update",
   "Persona",
-  async (personaId: number, imageBase64: string): Promise<ActionResult> => {
-    const persona = await db.persona.findUnique({ where: { id: personaId } })
-    if (!persona) return { error: "Persona no encontrada" }
+  async (
+    framesBase64: string[]
+  ): Promise<{ error?: string; success?: boolean; blinks?: number }> => {
+    if (!framesBase64 || framesBase64.length === 0) {
+      return { error: "No se proporcionaron frames para verificación" }
+    }
 
     try {
-      const res = await fetch(`${process.env.BIOAPI_URL}/v1/faces/register`, {
+      const res = await fetch(`${process.env.BIOAPI_URL}/v1/faces/liveness`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "X-API-Key": process.env.BIOAPI_KEY!,
         },
         body: JSON.stringify({
-          persona_id: personaId,
-          image_base64: imageBase64,
+          frames_base64: framesBase64,
         }),
       })
 
@@ -193,9 +200,67 @@ export const registerFaceAction = withPermission(
         }
       }
 
+      const body = await res.json()
+      const liveness = body.data
+      if (liveness?.is_live) {
+        return { success: true, blinks: liveness.blinks_detected ?? 0 }
+      } else {
+        return {
+          error: body.message || "No se detectó parpadeo, intenta de nuevo",
+          blinks: liveness?.blinks_detected ?? 0,
+        }
+      }
+    } catch {
+      return { error: "No se pudo conectar con el servicio biométrico" }
+    }
+  }
+)
+
+// --- REGISTER FACE ---
+export const registerFaceAction = withPermission(
+  "update",
+  "Persona",
+  async (personaId: number, imagesJoined: string): Promise<ActionResult> => {
+    const persona = await db.persona.findUnique({ where: { id: personaId } })
+    if (!persona) return { error: "Persona no encontrada" }
+
+    // Images come joined by "|" separator to avoid array nesting limits
+    const images = imagesJoined.split("|")
+
+    try {
+      console.log(`Registrando rostro: persona_id=${personaId}, images=${images.length}`)
+
+      const res = await fetch(`${process.env.BIOAPI_URL}/v1/faces/register`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": process.env.BIOAPI_KEY!,
+        },
+        body: JSON.stringify({
+          persona_id: personaId,
+          images_base64: images,
+        }),
+      })
+
+      const body = await res.json().catch(() => null)
+      console.log("BioAPI response:", res.status, body?.success, body?.message)
+
+      if (!res.ok) {
+        return {
+          error:
+            body?.detail ?? body?.message ?? `Error del servicio biométrico (${res.status})`,
+        }
+      }
+
+      if (body && body.success === false) {
+        return { error: body.message ?? "Error al registrar rostro en el servicio biométrico" }
+      }
+
+      console.log("Registro biométrico exitoso:", body?.message, body?.data)
       revalidatePath("/admin/personas")
       return { success: true }
-    } catch {
+    } catch (e) {
+      console.error("Error conectando con BioAPI:", e)
       return { error: "No se pudo conectar con el servicio biométrico" }
     }
   }

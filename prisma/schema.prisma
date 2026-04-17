@@ -119,11 +119,15 @@ enum TipoPersona {
   estudiante
   postulante
   egresado
+
+  @@map("tipo_persona")
 }
 
 enum ResultadoAcceso {
   autorizado
   denegado
+
+  @@map("resultado_acceso")
 }
 
 model Persona {

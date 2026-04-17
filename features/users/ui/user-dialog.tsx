@@ -122,7 +122,7 @@ export function UserDialog({ open, onOpenChange, user, roles }: UserDialogProps)
 
     setIsLookingUp(true)
     try {
-      const res = await fetch(`https://apidatos.unamad.edu.pe/api/consulta/${dni}`)
+      const res = await fetch(`/api/consulta/${dni}`)
       if (!res.ok) throw new Error("Not found")
       const data: ReniecData = await res.json()
 

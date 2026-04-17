@@ -5,7 +5,9 @@ import { motion, AnimatePresence } from "motion/react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Radio, Wifi, WifiOff, ScanFace, Clock } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Radio, Wifi, WifiOff, ScanFace, Clock, Camera } from "lucide-react"
+import { IdentifyDialog } from "./identify-dialog"
 
 interface BiometricEvent {
   persona_id: number
@@ -205,6 +207,7 @@ function EventCard({ event }: { event: BiometricEvent }) {
 export function LiveDashboard() {
   const [events, setEvents] = useState<BiometricEvent[]>([])
   const [connected, setConnected] = useState(false)
+  const [identifyOpen, setIdentifyOpen] = useState(false)
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const reconnectAttemptRef = useRef(0)
@@ -305,6 +308,10 @@ export function LiveDashboard() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button onClick={() => setIdentifyOpen(true)} size="sm" className="gap-2">
+            <Camera className="h-4 w-4" />
+            Identificar rostro
+          </Button>
           <Badge
             variant={connected ? "default" : "destructive"}
             className="gap-1"
@@ -370,6 +377,8 @@ export function LiveDashboard() {
           </CardContent>
         </Card>
       </motion.div>
+
+      <IdentifyDialog open={identifyOpen} onOpenChange={setIdentifyOpen} />
     </div>
   )
 }

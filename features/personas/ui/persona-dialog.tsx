@@ -95,7 +95,7 @@ export function PersonaDialog({ open, onOpenChange, persona }: PersonaDialogProp
 
     setIsLookingUp(true)
     try {
-      const res = await fetch(`https://apidatos.unamad.edu.pe/api/consulta/${dniValue}`)
+      const res = await fetch(`/api/consulta/${dniValue}`)
       if (!res.ok) throw new Error("Not found")
       const data: ReniecData = await res.json()
 
